@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from Crypto.Cipher import DES, AES
 import hashlib
 import time
-import zlib
+
+from Crypto.Cipher import DES, AES
 
 
 _BS_ = 8
@@ -14,21 +14,7 @@ _unpad_ = lambda s: s[0:-ord(s[-1])]
 pad = lambda s, BS: s + (BS - len(s) % BS) * chr(BS - len(s) % BS)
 
 
-class utils(object):
-
-    @staticmethod
-    def restapi_decrypt(data):
-        key = "babc8103776986ce272aa8af524da1f1"
-        tmp = hashlib.md5(key).digest()
-        cipher = DES.new(tmp[:8], mode=DES.MODE_CBC, IV=tmp[8:])
-        return _unpad_(cipher.decrypt(data))
-
-    @staticmethod
-    def restapi_encrypt(data):
-        key = "babc8103776986ce272aa8af524da1f1"
-        tmp = hashlib.md5(key).digest()
-        cipher = DES.new(tmp[:8], mode=DES.MODE_CBC, IV=tmp[8:])
-        return cipher.encrypt(pad(data, 8))
+class Utils(object):
 
     @staticmethod
     def DES_decrypt(key, iv, data):
@@ -55,29 +41,20 @@ class utils(object):
         return cipher.encrypt(pad(data, 16))
 
     @staticmethod
-    def deflate(data):
-        return zlib.compress(data, 4)
-
-    @staticmethod
-    def inflate(data):
-        return zlib.decompress(data)
-
-    @staticmethod
     def xor(data, key):
         return "".join(map(lambda c: chr(ord(c) ^ key), data))
 
 
 class Account(object):
-
-    def __init__(self, user_id, sessionKey):
+    def __init__(self, user_id, deviceToken):
         self.aes_key = hashlib.md5("ILovePerl").digest()
         self.userID = user_id
-        self.sk = sessionKey
+        self.DToken = deviceToken
 
     @property
     def cryptedUserID(self):
         if not hasattr(self, "_cryptUserID"):
-            cryptUserID = utils.DES_encrypt("5t216ObT", "5t216ObT", self.userID)
+            cryptUserID = Utils.DES_encrypt("5t216ObT", "5t216ObT", self.userID)
             self._cryptUserID = "".join(map(lambda c: "%02x" % ord(c), cryptUserID))
         return self._cryptUserID
 
@@ -100,25 +77,22 @@ class Account(object):
         return self._requestKey
 
     @property
-    def cryptedSessionKey(self):
-        if not hasattr(self, "_cryptedSessionKey"):
-            cryptedSessionKey = utils.DES_encrypt("5t216ObT", "5t216ObT", self.sk)
-            self._cryptedSessionKey = "".join(map(lambda c: "%02x" % ord(c), cryptedSessionKey))
-        return self._cryptedSessionKey
-
-    @property
     def timestamp(self):
         stamp = int(time.time() - 28800)
         return self.encrypt("%smerctotostoria" % stamp)
 
-    def deviceToken(self, deviceToken):
-        return utils.DES_encrypt("00e2fdaa", "00e2fdaa", deviceToken)
+    @property
+    def deviceToken(self):
+        if not hasattr(self, "_deviceToken"):
+            deviceToken = Utils.DES_encrypt("00e2fdaa", "00e2fdaa", self.DToken)
+            self._deviceToken = "".join(map(lambda c: "%02x" % ord(c), deviceToken))
+        return self._deviceToken
 
     def encrypt(self, data):
-        return utils.AES_encrypt(self.requestKey, self.requestIV, data)
+        return Utils.AES_encrypt(self.requestKey, self.requestIV, data)
 
     def decrypt(self, data):
-        return utils.AES_decrypt(self.requestKey, self.requestIV, data)
+        return Utils.AES_decrypt(self.requestKey, self.requestIV, data)
 
 
 class Auth(object):
@@ -140,14 +114,13 @@ class Auth(object):
 
     def decrypt(self, data):
         data = self.encode(data, self.response_key)[18:]
-        return zlib.decompress(data)
+        return data
 
     def request_decrypt(self, data):
         data = self.encode(data, self.request_key)[18:]
-        return zlib.decompress(data)
-
+        return data
+    
     def encrypt(self, data):
-        data = zlib.compress(data)
         data = self.encode(data, self.request_key)
         _hash = hashlib.md5(self.checksumKey + data).digest()
         return self.version + _hash + data
@@ -168,6 +141,3 @@ class KYCrypt(object):
     def decrypt(self, data):
         return _unpad_(self.cipher.decrypt(data.decode("base64")))
 
-
-auth = Auth()
-ky = KYCrypt()
